@@ -9,11 +9,14 @@
 
 #define I2C_DEV "/dev/i2c-1"
 
+
+//for channel 1,  pac 0x10 and pac 0x11 is in channel 1
 #define PAC_REFRESH_CMD 0x00
 #define REG_VBUS1       0x07
 #define REG_VSENSE1     0x0B
 #define REG_VPOWER1     0x17
 
+//for channel 3, pac 0x12 i
 #define REG_VBUS3       0x09
 #define REG_VSENSE3     0x0D
 #define REG_VPOWER3     0x19
@@ -21,7 +24,11 @@
 
 uint8_t pac_address [2]  = { 0x10, 0x11};
 
-
+//scaling constants according to datasheet formula 
+#define FS_VBUS_VOLTS    9.0      //9 volt FSR for VBus
+#define FS_VSENSE_VOLTS  0.1      //100 mv FSR for Vsense
+#define ADC_DENOM        65536.0  //denominator 2¹⁶ from formula 
+#define RSENSE_OHM       1.0      //from ckt
 
 void i2c_set_slave(int fd, uint8_t addr)
 {
@@ -46,14 +53,12 @@ void  pac_read_reg(int fd, uint8_t reg, uint8_t *buf, size_t len)
 int main(void)
 {
     uint8_t raw[2];
-    uint16_t vbus, vsense;
     uint8_t pow[4];
-    uint32_t Vpower;
+
     
     uint8_t raw3[2];
-    uint16_t vbus3, vsense3;
     uint8_t pow3[4];
-    uint32_t Vpower3;
+    
     
     int fd = open(I2C_DEV, O_RDWR);
     for (int i = 0; i < 2; i++){ 
@@ -66,15 +71,15 @@ int main(void)
 
     /* Read VBUS */
     pac_read_reg(fd, REG_VBUS1, raw, 2);
-    vbus = (raw[0] << 8) | raw[1];
+    uint16_t vbus = (raw[0] << 8) | raw[1];
 
     /* Read VSENSE */
     pac_read_reg(fd, REG_VSENSE1, raw, 2);
-    vsense = (raw[0] << 8) | raw[1];
+    uint16_t vsense = (raw[0] << 8) | raw[1];
     
     /* Read VPOWER */
     pac_read_reg(fd, REG_VPOWER1, pow, 4);
-    Vpower = (pow[0] << 24) | (pow[1] << 16)  | (pow[2] << 8) | pow[3] ;
+    uint32_t Vpower = (pow[0] << 24) | (pow[1] << 16)  | (pow[2] << 8) | pow[3] ;
         
         
     printf ("Pac%d at i2c address 0X%02X" , i+1 , pac_address[i]);
@@ -91,15 +96,15 @@ int main(void)
 
     /* Read VBUS */
     pac_read_reg(fd, REG_VBUS3, raw3, 2);
-    vbus3 = (raw3[0] << 8) | raw3[1];
+    uint16_t vbus3 = (raw3[0] << 8) | raw3[1];
 
     /* Read VSENSE */
     pac_read_reg(fd, REG_VSENSE3, raw3, 2);
-    vsense3 = (raw3[0] << 8) | raw3[1];
+    uint16_t vsense3 = (raw3[0] << 8) | raw3[1];
     
     /* Read VPOWER */
     pac_read_reg(fd, REG_VPOWER3, pow3, 4);
-    Vpower3 = (pow3[0] << 24) | (pow3[1] << 16)  | (pow3[2] << 8) | pow3[3] ;
+    uint32_t Vpower3 = (pow3[0] << 24) | (pow3[1] << 16)  | (pow3[2] << 8) | pow3[3] ;
         
         
     
