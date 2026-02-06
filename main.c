@@ -28,7 +28,7 @@ uint8_t pac_address [2]  = { 0x10, 0x11};
 #define FS_VBUS_VOLTS    9.0      //9 volt FSR for VBus
 #define FS_VSENSE_VOLTS  0.1      //100 mv FSR for Vsense
 #define ADC_DENOM        65536.0  //denominator 2¹⁶ from formula 
-#define RSENSE_OHM       1.0      //from ckt
+#define RSENSE_OHMS       1.0      //from ckt
 
 void i2c_set_slave(int fd, uint8_t addr)
 {
@@ -46,6 +46,18 @@ void  pac_read_reg(int fd, uint8_t reg, uint8_t *buf, size_t len)
 {
     write(fd, &reg, 1);  
     read(fd, buf, len);
+}
+
+void print_channel(uint16_t vbus_raw, uint16_t vsense_raw)
+{
+    double vbus_v   = FS_VBUS_VOLTS   * ((double)vbus_raw   / ADC_DENOM);
+    double vsense_v = FS_VSENSE_VOLTS * ((double)vsense_raw / ADC_DENOM);
+    double i_a      = vsense_v / RSENSE_OHMS;
+
+    printf("  VBUS   raw=0x%04X  -> %.6f V\n", vbus_raw, vbus_v);
+    printf("  VSENSE raw=0x%04X  -> %.6f V  (%.3f mV)\n", vsense_raw, vsense_v, vsense_v * 1000.0);
+    printf("  I      (Rsense=%.3f ohm) -> %.6f A (%.3f mA)\n", RSENSE_OHMS, i_a, i_a * 1000.0);
+
 }
 
 
@@ -86,6 +98,7 @@ int main(void)
     printf("  VBUS raw   = 0x%04X (%u)\n", vbus, vbus);
     printf("  VSENSE raw = 0x%04X (%u)\n", vsense, vsense);
     printf("  VPower raw = 0x%08X (%u)\n", Vpower, Vpower);
+    print_channel (vbus, vsense);
     }
     
     i2c_set_slave(fd, 0x12);
@@ -107,10 +120,11 @@ int main(void)
     uint32_t Vpower3 = (pow3[0] << 24) | (pow3[1] << 16)  | (pow3[2] << 8) | pow3[3] ;
         
         
-    
+    printf ("Pac3 at i2c address 0x12" );
     printf("  VBUS raw3   = 0x%04X (%u)\n", vbus3, vbus3);
     printf("  VSENSE raw3 = 0x%04X (%u)\n", vsense3, vsense3);
     printf("  VPower raw3= 0x%08X (%u)\n", Vpower3, Vpower3);
+    print_channel (vbus3, vsense3);
 
 
     close(fd);
