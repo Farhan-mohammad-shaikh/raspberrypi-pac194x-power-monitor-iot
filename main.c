@@ -16,7 +16,7 @@
 #define REG_VSENSE1     0x0B
 #define REG_VPOWER1     0x17
 
-//for channel 3, pac 0x12 i
+//for channel 3, pac 0x12 is in channel 3
 #define REG_VBUS3       0x09
 #define REG_VSENSE3     0x0D
 #define REG_VPOWER3     0x19
@@ -27,7 +27,7 @@ uint8_t pac_address [2]  = { 0x10, 0x11};
 //scaling constants according to datasheet formula 
 #define FS_VBUS_VOLTS    9.0      //9 volt FSR for VBus
 #define FS_VSENSE_VOLTS  0.1      //100 mv FSR for Vsense
-#define ADC_DENOM        65536.0  //denominator 2¹⁶ from formula 
+#define ADC_DENOM        65536.0  //denominator 2¹⁶ from formula for unipolar measurements
 #define RSENSE_OHMS       1.0      //from ckt
 
 void i2c_set_slave(int fd, uint8_t addr)
@@ -48,11 +48,7 @@ void  pac_read_reg(int fd, uint8_t reg, uint8_t *buf, size_t len)
     read(fd, buf, len);
 }
 
- void print_channel_json(uint8_t i2c_addr,
-                               int channel,
-                               uint16_t vbus_raw,
-                               uint16_t vsense_raw,
-                               uint32_t vpower_raw)
+ void print_channel_json(uint8_t i2c_addr,int channel, uint16_t vbus_raw, uint16_t vsense_raw, uint32_t vpower_raw)
 {
     double vbus_v   = FS_VBUS_VOLTS   * ((double)vbus_raw   / ADC_DENOM);
     double vsense_v = FS_VSENSE_VOLTS * ((double)vsense_raw / ADC_DENOM);
