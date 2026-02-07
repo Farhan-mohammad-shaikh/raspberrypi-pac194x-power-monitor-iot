@@ -2,12 +2,12 @@ import json
 import subprocess
 import paho.mqtt.client as mqtt
 
-# ---------- Configuration ----------
+#Configuration
 BROKER = "localhost"              # Broker on same Pi
 PORT   = 1883
 TOPIC  = "lab/pac"
-BINARY = "./main"                 # Your compiled C program
-# -----------------------------------
+BINARY = "./main"                 
+
 
 # Start C program
 proc = subprocess.Popen(
