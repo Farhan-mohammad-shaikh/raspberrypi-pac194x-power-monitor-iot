@@ -48,18 +48,40 @@ void  pac_read_reg(int fd, uint8_t reg, uint8_t *buf, size_t len)
     read(fd, buf, len);
 }
 
-void print_channel(uint16_t vbus_raw, uint16_t vsense_raw)
+ void print_channel_json(uint8_t i2c_addr,
+                               int channel,
+                               uint16_t vbus_raw,
+                               uint16_t vsense_raw,
+                               uint32_t vpower_raw)
 {
     double vbus_v   = FS_VBUS_VOLTS   * ((double)vbus_raw   / ADC_DENOM);
     double vsense_v = FS_VSENSE_VOLTS * ((double)vsense_raw / ADC_DENOM);
-    double i_a      = vsense_v / RSENSE_OHMS;
+    double current_a = vsense_v / RSENSE_OHMS;
 
-    printf("  VBUS   raw=0x%04X  -> %.6f V\n", vbus_raw, vbus_v);
-    printf("  VSENSE raw=0x%04X  -> %.6f V  (%.3f mV)\n", vsense_raw, vsense_v, vsense_v * 1000.0);
-    printf("  I      (Rsense=%.3f ohm) -> %.6f A (%.3f mA)\n", RSENSE_OHMS, i_a, i_a * 1000.0);
+    // One JSON object per line (perfect for your Python subprocess reader)
+    printf(
+        "{\"i2c_addr\":\"0x%02X\","
+        "\"channel\":%d,"
+        "\"vbus_raw\":%u,"
+        "\"vsense_raw\":%u,"
+        "\"vpower_raw\":%u,"
+        "\"vbus_V\":%.6f,"
+        "\"vsense_V\":%.6f,"
+        "\"current_A\":%.6f}"
+        "\n",
+        i2c_addr,
+        channel,
+        (unsigned)vbus_raw,
+        (unsigned)vsense_raw,
+        (unsigned)vpower_raw,
+        vbus_v,
+        vsense_v,
+        current_a
+    );
 
+    // Important when piping stdout to Python: flush so each line appears immediately
+    fflush(stdout);
 }
-
 
 
 int main(void)
@@ -91,14 +113,10 @@ int main(void)
     
     /* Read VPOWER */
     pac_read_reg(fd, REG_VPOWER1, pow, 4);
-    uint32_t Vpower = (pow[0] << 24) | (pow[1] << 16)  | (pow[2] << 8) | pow[3] ;
+    uint32_t vpower = (pow[0] << 24) | (pow[1] << 16)  | (pow[2] << 8) | pow[3] ;
         
         
-    printf ("Pac%d at i2c address 0X%02X" , i+1 , pac_address[i]);
-    printf("  VBUS raw   = 0x%04X (%u)\n", vbus, vbus);
-    printf("  VSENSE raw = 0x%04X (%u)\n", vsense, vsense);
-    printf("  VPower raw = 0x%08X (%u)\n", Vpower, Vpower);
-    print_channel (vbus, vsense);
+    print_channel_json(pac_address[i], 1, vbus, vsense, vpower);
     }
     
     i2c_set_slave(fd, 0x12);
@@ -117,14 +135,10 @@ int main(void)
     
     /* Read VPOWER */
     pac_read_reg(fd, REG_VPOWER3, pow3, 4);
-    uint32_t Vpower3 = (pow3[0] << 24) | (pow3[1] << 16)  | (pow3[2] << 8) | pow3[3] ;
+    uint32_t vpower3 = (pow3[0] << 24) | (pow3[1] << 16)  | (pow3[2] << 8) | pow3[3] ;
         
         
-    printf ("Pac3 at i2c address 0x12" );
-    printf("  VBUS raw3   = 0x%04X (%u)\n", vbus3, vbus3);
-    printf("  VSENSE raw3 = 0x%04X (%u)\n", vsense3, vsense3);
-    printf("  VPower raw3= 0x%08X (%u)\n", Vpower3, Vpower3);
-    print_channel (vbus3, vsense3);
+    print_channel_json(0x12, 3, vbus3, vsense3, vpower3);
 
 
     close(fd);
