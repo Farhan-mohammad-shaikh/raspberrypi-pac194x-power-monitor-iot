@@ -136,6 +136,8 @@ make
 
 ```
 sudo ./main
+or
+make run
 ```
 
 ---
@@ -169,11 +171,6 @@ sudo ./main
 - Automatic device detection
 - Integration with cloud analytics platforms
 
----
-
-## License
-
-MIT License
 
 ---
 
