@@ -6,8 +6,11 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <signal.h>
+#include <pthread.h>
 
 #define I2C_DEV "/dev/i2c-1"
+static volatile sig_atomic_t running = 1;
 
 
 //for channel 1,  pac 0x10 and pac 0x11 is in channel 1
@@ -30,6 +33,14 @@ uint8_t pac_address [2]  = { 0x10, 0x11};
 #define ADC_DENOM        65536.0  //denominator 2¹⁶ from formula for unipolar measurements
 #define RSENSE_OHMS       1.0      //from ckt
 
+
+void on_sigint(int signal)
+{
+    (void) signal;
+    running = 0;
+	
+}
+
 void i2c_set_slave(int fd, uint8_t addr)
 {
     ioctl(fd, I2C_SLAVE, addr);
@@ -48,7 +59,52 @@ void  pac_read_reg(int fd, uint8_t reg, uint8_t *buf, size_t len)
     read(fd, buf, len);
 }
 
+
  void print_channel_json(uint8_t i2c_addr,int channel, uint16_t vbus_raw, uint16_t vsense_raw, uint32_t vpower_raw)
+=======
+void led_trigger(char *cmd)
+{
+	int fd = open("/sys/class/leds/ACT/trigger", O_WRONLY);
+	write (fd, cmd, 4);
+	close(fd);
+	
+}
+
+void led_brightness (int on)
+{
+	int fd = open("/sys/class/leds/ACT/brightness", O_WRONLY);
+	if (on)
+	{
+		write (fd, "1", 1);
+	}else 
+	{
+		write (fd, "0", 1);
+	}
+	close (fd);
+	
+}
+
+void *blink_tread (void *arg)
+{
+	led_trigger("none");
+	while (running)
+	{
+		led_brightness(1);
+		usleep(200000);
+		led_brightness(0);
+		usleep(200000);	
+	}
+	led_trigger("mmc0");
+	return NULL;	
+}
+
+
+ void print_channel_json(uint8_t i2c_addr,
+                               int channel,
+                               uint16_t vbus_raw,
+                               uint16_t vsense_raw,
+                               uint32_t vpower_raw)
+
 {
     double vbus_v   = FS_VBUS_VOLTS   * ((double)vbus_raw   / ADC_DENOM);
     double vsense_v = FS_VSENSE_VOLTS * ((double)vsense_raw / ADC_DENOM);
@@ -82,6 +138,11 @@ void  pac_read_reg(int fd, uint8_t reg, uint8_t *buf, size_t len)
 
 int main(void)
 {
+	
+	pthread_t led_thread;
+	
+	signal(SIGINT, on_sigint);
+	
     uint8_t raw[2];
     uint8_t pow[4];
 
@@ -91,6 +152,13 @@ int main(void)
     
     
     int fd = open(I2C_DEV, O_RDWR);
+    
+    pthread_create(&led_thread, NULL, blink_tread, NULL);
+    
+    while (running)
+    
+    {
+		
     for (int i = 0; i < 2; i++){ 
     /* Refresh */
     i2c_set_slave(fd, pac_address[i]);
@@ -135,8 +203,12 @@ int main(void)
         
         
     print_channel_json(0x12, 3, vbus3, vsense3, vpower3);
+    usleep(200000);
 
-
+ }
     close(fd);
+    
+    pthread_join (led_thread, NULL);
+
     return 0;
 }

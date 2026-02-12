@@ -6,12 +6,12 @@ import paho.mqtt.client as mqtt
 BROKER = "localhost"              # Broker on same Pi
 PORT   = 1883
 TOPIC  = "lab/pac"
-BINARY = "./main"                 
+             
 
 
 # Start C program
 proc = subprocess.Popen(
-    [BINARY],
+    ["./main"],
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT,
     text=True,
