@@ -147,9 +147,9 @@ void *blink_tread (void *arg)
         "\"vsense_raw\":%u,"
         "\"vpower_raw\":%u,"
         "\"vbus_V\":%.6f,"
-        "\"current_A\":%.6f}"
-        "\"vpower_V\":%.6f,"
-        "\n",
+        "\"current_A\":%.6f,"
+        "\"vpower_V\":%.6f"
+        "}\n",
         i2c_addr,
         channel,
         (unsigned)vbus_raw,
