@@ -60,8 +60,8 @@ void  pac_read_reg(int fd, uint8_t reg, uint8_t *buf, size_t len)
 }
 
 
- void print_channel_json(uint8_t i2c_addr,int channel, uint16_t vbus_raw, uint16_t vsense_raw, uint32_t vpower_raw)
-=======
+//void print_channel_json(uint8_t i2c_addr,int channel, uint16_t vbus_raw, uint16_t vsense_raw, uint32_t vpower_raw)
+
 void led_trigger(char *cmd)
 {
 	int fd = open("/sys/class/leds/ACT/trigger", O_WRONLY);
