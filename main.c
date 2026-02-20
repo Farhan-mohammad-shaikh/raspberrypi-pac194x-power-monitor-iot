@@ -41,22 +41,46 @@ void on_sigint(int signal)
 	
 }
 
-void i2c_set_slave(int fd, uint8_t addr)
+int i2c_set_slave(int fd, uint8_t addr)
 {
-    ioctl(fd, I2C_SLAVE, addr);
+    if (ioctl(fd, I2C_SLAVE, addr) < 0) 
+    {
+        fprintf(stderr, "I2C_SLAVE 0x%02X failed: %s\n", addr, strerror(errno));
+        return -1;
+    }
+    return 0;
 }
 
 
-void pac_send_byte(int fd, uint8_t cmd)
+static int pac_refresh_g(int fd)
 {
-    write(fd, &cmd, 1);
+    if (i2c_set_slave(fd, 0x00) != 0) return -1;
+
+    uint8_t cmd = 0x1E;
+    if (write(fd, &cmd, 1) != 1) 
+    {
+        fprintf(stderr, "REFRESH_G write failed: %s\n", strerror(errno));
+        return -2;
+    }
+    return 0;
 }
 
 
-void  pac_read_reg(int fd, uint8_t reg, uint8_t *buf, size_t len)
+static int pac_read_reg(int fd, uint8_t reg, uint8_t *buf, size_t len)
 {
-    write(fd, &reg, 1);  
-    read(fd, buf, len);
+    if (write(fd, &reg, 1) != 1) 
+    {
+        fprintf(stderr, "Write reg 0x%02X failed: %s\n", reg, strerror(errno));
+        return -1;
+    }
+    int r = read(fd, buf, len);
+    if (r != (int)len)
+    {
+        fprintf(stderr, "Read reg 0x%02X failed: got %d/%zu (%s)\n",
+                reg, r, len, strerror(errno));
+        return -2;
+    }
+    return 0;
 }
 
 
@@ -76,7 +100,9 @@ void led_brightness (int on)
 	if (on)
 	{
 		write (fd, "1", 1);
-	}else 
+	}
+	
+	else 
 	{
 		write (fd, "0", 1);
 	}
@@ -109,6 +135,9 @@ void *blink_tread (void *arg)
     double vbus_v   = FS_VBUS_VOLTS   * ((double)vbus_raw   / ADC_DENOM);
     double vsense_v = FS_VSENSE_VOLTS * ((double)vsense_raw / ADC_DENOM);
     double current_a = vsense_v / RSENSE_OHMS;
+    double pwr_fsr = (0.9 / RSENSE_OHMS);
+    uint32_t vpower_code = (vpower_raw >> 2);
+    double power_w = pwr_fsr * ((double) vpower_code / 1073741824.0);
 
     // One JSON object per line (perfect for your Python subprocess reader)
     printf(
@@ -118,8 +147,8 @@ void *blink_tread (void *arg)
         "\"vsense_raw\":%u,"
         "\"vpower_raw\":%u,"
         "\"vbus_V\":%.6f,"
-        "\"vsense_V\":%.6f,"
         "\"current_A\":%.6f}"
+        "\"vpower_V\":%.6f,"
         "\n",
         i2c_addr,
         channel,
@@ -127,8 +156,8 @@ void *blink_tread (void *arg)
         (unsigned)vsense_raw,
         (unsigned)vpower_raw,
         vbus_v,
-        vsense_v,
-        current_a
+        current_a,
+        power_w
     );
 
     // Important when piping stdout to Python: flush so each line appears immediately
@@ -159,53 +188,56 @@ int main(void)
     
     {
 		
-    for (int i = 0; i < 2; i++){ 
-    /* Refresh */
-    i2c_set_slave(fd, pac_address[i]);
-    pac_send_byte(fd, PAC_REFRESH_CMD) ;
+		// 1) Global snapshot (refresh) for ALL PAC194x on the bus
+		if (pac_refresh_g(fd) != 0) 
+		{
+			usleep(200000);
+			continue;
+		}
 
-    /* Give PAC time to latch values */
-    usleep(2000);  // 2 ms 
-
-    /* Read VBUS */
-    pac_read_reg(fd, REG_VBUS1, raw, 2);
-    uint16_t vbus = (raw[0] << 8) | raw[1];
-
-    /* Read VSENSE */
-    pac_read_reg(fd, REG_VSENSE1, raw, 2);
-    uint16_t vsense = (raw[0] << 8) | raw[1];
+		// 2) Give time for registers to become stable (you want correctness, not speed)
+		usleep(5000); // 5 ms
     
-    /* Read VPOWER */
-    pac_read_reg(fd, REG_VPOWER1, pow, 4);
-    uint32_t vpower = (pow[0] << 24) | (pow[1] << 16)  | (pow[2] << 8) | pow[3] ;
-        
-        
-    print_channel_json(pac_address[i], 1, vbus, vsense, vpower);
-    }
+		for (int i = 0; i < 2; i++)
+		{ 
+			i2c_set_slave(fd, pac_address[i]);
+
+			/* Read VBUS */
+			pac_read_reg(fd, REG_VBUS1, raw, 2);
+			uint16_t vbus = (raw[0] << 8) | raw[1];
+
+			/* Read VSENSE */
+			pac_read_reg(fd, REG_VSENSE1, raw, 2);
+			uint16_t vsense = (raw[0] << 8) | raw[1];
     
-    i2c_set_slave(fd, 0x12);
-    pac_send_byte(fd, PAC_REFRESH_CMD) ;
-
-    /* Give PAC time to latch values */
-    usleep(2000);  // 2 ms 
-
-    /* Read VBUS */
-    pac_read_reg(fd, REG_VBUS3, raw3, 2);
-    uint16_t vbus3 = (raw3[0] << 8) | raw3[1];
-
-    /* Read VSENSE */
-    pac_read_reg(fd, REG_VSENSE3, raw3, 2);
-    uint16_t vsense3 = (raw3[0] << 8) | raw3[1];
+			/* Read VPOWER */
+			pac_read_reg(fd, REG_VPOWER1, pow, 4);
+			uint32_t vpower = (pow[0] << 24) | (pow[1] << 16)  | (pow[2] << 8) | pow[3] ;
+        
+        
+			print_channel_json(pac_address[i], 1, vbus, vsense, vpower);
+			
+		}
     
-    /* Read VPOWER */
-    pac_read_reg(fd, REG_VPOWER3, pow3, 4);
-    uint32_t vpower3 = (pow3[0] << 24) | (pow3[1] << 16)  | (pow3[2] << 8) | pow3[3] ;
-        
-        
-    print_channel_json(0x12, 3, vbus3, vsense3, vpower3);
-    usleep(200000);
+		i2c_set_slave(fd, 0x12);
+		
+		/* Read VBUS */
+		pac_read_reg(fd, REG_VBUS3, raw3, 2);
+		uint16_t vbus3 = (raw3[0] << 8) | raw3[1];
 
- }
+		/* Read VSENSE */
+		pac_read_reg(fd, REG_VSENSE3, raw3, 2);
+		uint16_t vsense3 = (raw3[0] << 8) | raw3[1];
+    
+		/* Read VPOWER */
+		pac_read_reg(fd, REG_VPOWER3, pow3, 4);
+		uint32_t vpower3 = (pow3[0] << 24) | (pow3[1] << 16)  | (pow3[2] << 8) | pow3[3] ;
+        
+        
+		print_channel_json(0x12, 3, vbus3, vsense3, vpower3);
+		usleep(200000);
+
+	}
     close(fd);
     
     pthread_join (led_thread, NULL);
